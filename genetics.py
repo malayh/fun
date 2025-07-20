@@ -82,10 +82,10 @@ def run_animal(dna_len, dna: list = None, iterations: int = 100, display: bool =
         if i % 10 == 0: 
             new_score = np.sum(animal.game.state)
             if new_score <= 0: 
-                print(f"Animal died after {iterations} iterations.")
+                print(f"Animal died after {i} iterations.")
                 break
             if new_score == last_score:
-                print("Animal is stuck after {iterations} iterations, ending simulation.")
+                print(f"Animal is stuck after {i} iterations, ending simulation.")
                 break
 
             last_score = new_score   
