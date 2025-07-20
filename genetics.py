@@ -48,7 +48,7 @@ class Animal:
             if random.random() < 0.1:  # 10% chance of mutation
                 new_dna[i] = 1 - new_dna[i]
                 print(f"Mutation occurred for gene {i}")
-                break
+                break # More mutations can be allowed by removing this line
 
         animal = Animal(self.dna_len, new_dna.tolist())
         animal.parents = [self, other]
@@ -69,6 +69,7 @@ def run_animal(dna_len, dna: list = None, iterations: int = 100, display: bool =
     if display:
         drawer = GameOfLifeDrawer(animal.game, window_size=WINDOW_SIZE, cell_size=8)
 
+    last_score = 0
     for i in range(iterations):
         if display:
             drawer.draw_state()
@@ -78,9 +79,17 @@ def run_animal(dna_len, dna: list = None, iterations: int = 100, display: bool =
                     pg.quit()
 
         animal.game.state = animal.game.compute_next_state()
-        if i % 10 == 0 and np.sum(animal.game.state) <= 0:
-            break
-                
+        if i % 10 == 0: 
+            new_score = np.sum(animal.game.state)
+            if new_score <= 0: 
+                print(f"Animal died after {iterations} iterations.")
+                break
+            if new_score == last_score:
+                print("Animal is stuck after {iterations} iterations, ending simulation.")
+                break
+
+            last_score = new_score   
+              
     animal.score = np.sum(animal.game.state)
     print(f"Animal Score: {animal.score}, DNA: {animal.dna.tolist()}")
     return animal
@@ -105,12 +114,12 @@ def make_babies(population: list):
 
 def run_simulation():
     generations: int = 50
-    population_size: int = 20
-    dna_len: int = 50
+    population_size: int = 80
+    dna_len: int = 26
     iterations: int = 500
     
-    display = False
-    pool = mp.Pool(8)
+    display = True
+    pool = mp.Pool(16)
 
 
     gen_file = f"animals/genetics_{uuid.uuid4().hex[:6]}.json"
