@@ -33,16 +33,27 @@ class Animal:
 
     def make_state(self):
         state = np.zeros((self.game.grid_dim_x, self.game.grid_dim_y), dtype=np.int8)
-        position = (self.game.grid_dim_x // 2, self.game.grid_dim_y // 2)
+        position = self.get_starting_position()
 
 
-        start_x = position[0] - self.dna_len // 2
-        start_y = position[1] - self.dna_len // 2
+        start_x = position[0]
+        start_y = position[1]
         end_x = start_x + self.dna_len
         end_y = start_y + self.dna_len
         state[start_x:end_x, start_y:end_y] = self.dna
 
         return state
+    
+    def get_starting_position(self):
+        # Starts at midle
+        # return self.game.grid_dim_x // 2, self.game.grid_dim_y // 2
+
+        # Starts at midle of left edge of the grid
+        return 10, self.game.grid_dim_y // 2
+    
+    def is_dead(self):
+        # An animal is dead if there are no alive cells in the game of life state
+        return np.sum(self.game.state) == 0
     
     def breed(self, other: 'Animal'):
         # Take the first half of the rows from self.dna
@@ -53,7 +64,7 @@ class Animal:
         new_dna = np.vstack((dna_1, dna_2))
 
         # Randomly mutate some genes in the new DNA
-        for i in range(5):
+        for i in range(15):
             # Mutate a single gene with a 10% probability
             if random.random() < 0.10:
                 row = random.randint(0, self.dna_len - 1)
@@ -66,7 +77,27 @@ class Animal:
     
     def compute_objective(self):
         # The objective function is the sum of all alive cells in the game of life state
-        return np.sum(self.game.state)
+        # return np.sum(self.game.state)
+
+
+        #
+        # For the movement task
+        #
+        # Get the center of mass of the alive cells and mesure the distance to the center of the right end of the grid
+        alive_cells = np.argwhere(self.game.state == 1)
+        if len(alive_cells) == 0:
+            return 0
+
+        # Calculate the center of mass
+        center_of_mass = np.mean(alive_cells, axis=0)
+
+        # Define the target point: center of the right edge of the grid
+        target_point = np.array([self.game.grid_dim_x - 1, self.game.grid_dim_y // 2])
+
+        # Calculate the distance to the target point
+        distance = np.linalg.norm(center_of_mass - target_point)
+        return 1 / (1 + distance)  # Higher score for closer distance
+
     
     def dump(self):
         return {
@@ -85,7 +116,7 @@ def run_animal(dna_len, dna: list = None, iterations: int = 100, display: bool =
 
     last_score = 0
     for i in range(iterations):
-        if display:
+        if display and i % 50 == 0:
             drawer.draw_state()
             pg.display.flip()
             for event in pg.event.get():
@@ -94,16 +125,20 @@ def run_animal(dna_len, dna: list = None, iterations: int = 100, display: bool =
 
         animal.game.state = animal.game.compute_next_state()
         if i % 10 == 0: 
-            new_score = animal.compute_objective()
-            if new_score <= 0: 
+            if animal.is_dead(): 
                 print(f"Animal died after {i} iterations.")
                 break
+
+            new_score = animal.compute_objective()
             if new_score == last_score:
                 print(f"Animal is stuck after {i} iterations, ending simulation.")
                 break
 
             last_score = new_score   
-              
+
+    if display:
+        pg.quit()
+
     animal.score = animal.compute_objective()
     print(f"Animal Score: {animal.score}, ID: {animal.id}, Parents: {animal.parents}")
     return animal
@@ -132,8 +167,8 @@ def run_simulation():
     dna_len: int = 26
     iterations: int = 500
     
-    display = True
-    pool = mp.Pool(16)
+    display = False
+    pool = mp.Pool(8)
 
 
     gen_file = f"animals/genetics_{uuid.uuid4().hex[:6]}.json"
@@ -179,7 +214,6 @@ def run_simulation():
 
 
 if __name__ == "__main__":
-    pg.mixer.quit()
     run_simulation()
     
 

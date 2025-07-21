@@ -56,6 +56,7 @@ class GameOfLifeDrawer:
         self.cell_size = cell_size
         
         pg.init()
+        pg.mixer.quit()
         self.screen = pg.display.set_mode(window_size)
 
 
