@@ -17,54 +17,68 @@ WINDOW_SIZE = (2000, 1600)
 # 4. During reproduction, the mates will cross their DNA
 
 class Animal:
-    def __init__(self, dna_len: int = 12, dna: list = None):
+    def __init__(self, dna_len: int = 12, dna: list = None, parents : list = []):
         self.dna_len = dna_len
-        self.dna = np.random.randint(0, 2, size=dna_len) if dna is None else np.array(dna)
+
+        if dna is None:
+            self.dna = np.random.randint(0, 2, size=(dna_len, dna_len))
+        else:
+            self.dna = np.array(dna)
 
         self.game = GameOfLife(*GameOfLifeDrawer.get_grid_dims(*WINDOW_SIZE, 8))
         self.game.state = self.make_state()
         self.score = 0
         self.id = uuid.uuid4().hex
-        self.parents = []
+        self.parents = parents
 
     def make_state(self):
         state = np.zeros((self.game.grid_dim_x, self.game.grid_dim_y), dtype=np.int8)
         position = (self.game.grid_dim_x // 2, self.game.grid_dim_y // 2)
-        for i in range(self.dna_len):
-            for j in range(self.dna_len):
-                if self.dna[i] == 1:
-                    x = position[0] + i - self.dna_len // 2
-                    y = position[1] + j - self.dna_len // 2
-                    if 0 <= x < self.game.grid_dim_x and 0 <= y < self.game.grid_dim_y:
-                        state[x][y] = 1
+
+
+        start_x = position[0] - self.dna_len // 2
+        start_y = position[1] - self.dna_len // 2
+        end_x = start_x + self.dna_len
+        end_y = start_y + self.dna_len
+        state[start_x:end_x, start_y:end_y] = self.dna
+
         return state
     
     def breed(self, other: 'Animal'):
-        dna_1 = self.dna[:self.dna_len // 2]
-        dna_2 = other.dna[self.dna_len // 2:]
-        new_dna = np.concatenate((dna_1, dna_2))
+        # Take the first half of the rows from self.dna
+        dna_1 = self.dna[:self.dna_len // 2, :]
+        # Take the second half of the rows from other.dna
+        dna_2 = other.dna[self.dna_len // 2:, :]
+        
+        new_dna = np.vstack((dna_1, dna_2))
 
-        for i in range(len(new_dna)):
-            if random.random() < 0.1:  # 10% chance of mutation
-                new_dna[i] = 1 - new_dna[i]
-                print(f"Mutation occurred for gene {i}")
-                break # More mutations can be allowed by removing this line
+        # Randomly mutate some genes in the new DNA
+        for i in range(5):
+            # Mutate a single gene with a 10% probability
+            if random.random() < 0.10:
+                row = random.randint(0, self.dna_len - 1)
+                col = random.randint(0, self.dna_len - 1)
+                new_dna[row, col] = 1 - new_dna[row, col]
+                print(f"Mutation occurred at ({row}, {col})")
 
-        animal = Animal(self.dna_len, new_dna.tolist())
-        animal.parents = [self, other]
+        animal = Animal(self.dna_len, new_dna.tolist(), parents=[self.id, other.id])
         return animal
+    
+    def compute_objective(self):
+        # The objective function is the sum of all alive cells in the game of life state
+        return np.sum(self.game.state)
     
     def dump(self):
         return {
             'id': self.id,
-            'dna': [int(gene) for gene in self.dna.tolist()],
+            'dna': [[int(gene) for gene in row] for row in self.dna],
             'score': int(self.score),
-            'parents': [parent.id for parent in self.parents]
+            'parents': self.parents
         }
 
 
-def run_animal(dna_len, dna: list = None, iterations: int = 100, display: bool = True):
-    animal = Animal(dna_len, dna)
+def run_animal(dna_len, dna: list = None, iterations: int = 100, display: bool = True, parents: list = []):
+    animal = Animal(dna_len, dna, parents=parents)
     
     if display:
         drawer = GameOfLifeDrawer(animal.game, window_size=WINDOW_SIZE, cell_size=8)
@@ -80,7 +94,7 @@ def run_animal(dna_len, dna: list = None, iterations: int = 100, display: bool =
 
         animal.game.state = animal.game.compute_next_state()
         if i % 10 == 0: 
-            new_score = np.sum(animal.game.state)
+            new_score = animal.compute_objective()
             if new_score <= 0: 
                 print(f"Animal died after {i} iterations.")
                 break
@@ -90,8 +104,8 @@ def run_animal(dna_len, dna: list = None, iterations: int = 100, display: bool =
 
             last_score = new_score   
               
-    animal.score = np.sum(animal.game.state)
-    print(f"Animal Score: {animal.score}, DNA: {animal.dna.tolist()}")
+    animal.score = animal.compute_objective()
+    print(f"Animal Score: {animal.score}, ID: {animal.id}, Parents: {animal.parents}")
     return animal
 
 def make_babies(population: list):
@@ -157,7 +171,7 @@ def run_simulation():
         print(f"Population size after breeding: {len(population)}")
 
         # Run the next generation
-        result = [pool.apply_async(run_animal, (dna_len, animal.dna, iterations, display)) for animal in population]
+        result = [pool.apply_async(run_animal, (dna_len, animal.dna, iterations, display,animal.parents)) for animal in population]
         population = sorted([r.get() for r in result], key=lambda x: x.score, reverse=True)
 
 
@@ -165,6 +179,7 @@ def run_simulation():
 
 
 if __name__ == "__main__":
+    pg.mixer.quit()
     run_simulation()
     
 
